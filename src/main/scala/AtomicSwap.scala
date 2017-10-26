@@ -9,15 +9,14 @@ import scala.concurrent.duration._
 object AtomicSwap extends App with StrictLogging {
 
   case class StartSwap(other: ActorRef)
-  case class Handshake(pk: ByteStr)
-  case class Locked(tx: Transaction, pk: ByteStr, secretHash: ByteStr)
+  case class Handshake(addr: Address)
+  case class Locked(tx: Transaction, addr: Address, secretHash: ByteStr)
   case class Unlocked(secret: ByteStr)
   case class Failed(tx: Transaction)
 
   abstract class ActorBase(sk: String) extends Actor {
     protected val key = ECKey.fromPrivate(sk.grouped(2).map(java.lang.Byte.parseByte(_, 16)).toArray)
     lazy val address = key.toAddress(Params)
-    lazy val publicKey = key.getPubKey
 
     private var revertAction: Cancellable = _
     protected def scheduleRevert(revertTx: Transaction) =
@@ -39,12 +38,12 @@ object AtomicSwap extends App with StrictLogging {
     private var revertAction: Cancellable = _
 
     def receive = {
-      case Handshake(pk) =>
-        val amount = Coin.parseCoin("0.648")
+      case Handshake(addr) =>
+        val amount = Coin.parseCoin("1.28")
         val secretHash = Sha256Hash.hash(secret)
-        val lockTx = lock("bf5701c595e96d49d9d671ed370e218eb2bc0d4225edd49dd94b6d12e2748332", 0, amount, secretHash, key, pk)
+        val lockTx = lock("915341d99010a2a0bb53ec95a067c3e2a2d167a3558d840131ca3db0939df3d1", 0, amount, secretHash, key, addr)
         log("lock tx", lockTx)
-        sender ! Locked(lockTx, publicKey, secretHash)
+        sender ! Locked(lockTx, address, secretHash)
         scheduleRevert(unlock(lockTx, 0, lockTx.getOutputSum, None, key, address))
 
       case Locked(tx, _, _) =>
@@ -71,14 +70,14 @@ object AtomicSwap extends App with StrictLogging {
     def receive = {
       case StartSwap(other) =>
         log("starts swap with " + other.path.name)
-        other ! Handshake(publicKey)
+        other ! Handshake(address)
 
       case Locked(tx, pk, secretHash) =>
         txToUnlock = tx
-        val amount = Coin.parseCoin("1.284")
-        val lockTx = lock("76efd4fb3f6cda2e0e3974096c12665d0009d8b0465ef4c924c37f3ee32c8e52", 0, amount, secretHash, key, pk)
+        val amount = Coin.parseCoin("0.644")
+        val lockTx = lock("3207a76aac1a014736debf96c7e92716ad4649749e032cb0bdffe3c6d3345787", 0, amount, secretHash, key, pk)
         log("lock tx", lockTx)
-        sender ! Locked(lockTx, publicKey, secretHash)
+        sender ! Locked(lockTx, address, secretHash)
         scheduleRevert(unlock(lockTx, 0, lockTx.getOutputSum, None, key, address))
 
       case Unlocked(secret) =>
